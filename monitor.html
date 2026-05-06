@@ -59,7 +59,6 @@
         #leaderboard::-webkit-scrollbar { width: 4px; }
         #leaderboard::-webkit-scrollbar-thumb { background: rgba(167, 139, 250, 0.2); border-radius: 10px; }
 
-        /* Fullscreen Button Hover */
         .fs-btn:hover {
             background: rgba(255, 255, 255, 0.1);
             color: white;
@@ -99,6 +98,7 @@
     </div>
 
     <div class="grid grid-cols-12 gap-16 h-[65vh] items-start">
+        <!-- Main Display Area -->
         <div class="col-span-8 flex flex-col justify-center h-full relative pr-4">
             <div id="mon-pts" class="mb-6 text-xl text-slate-900 font-black hidden uppercase tracking-[0.3em] bg-purple-300 w-fit px-5 py-1.5 rounded-full border border-purple-400 shadow-lg">
                 0 POINTS
@@ -108,6 +108,7 @@
                 Ready for the next Question...
             </div>
             
+            <!-- Answer Reveal Overlay -->
             <div id="mon-ans-container" class="absolute inset-0 bg-purple-950/90 backdrop-blur-2xl hidden flex-col items-center justify-center text-center p-12 rounded-[3rem] border border-purple-500/40 reveal-anim z-20 shadow-2xl">
                 <span class="text-emerald-400 font-bold tracking-[0.4em] uppercase text-sm mb-6 bg-emerald-500/10 px-4 py-1 rounded-full border border-emerald-500/20">Correct Answer</span>
                 <div id="mon-ans-text" class="text-7xl md:text-9xl font-black text-white uppercase tracking-tight drop-shadow-[0_0_30px_rgba(168,85,247,0.5)]">
@@ -116,6 +117,7 @@
             </div>
         </div>
         
+        <!-- Scoreboard Sidebar -->
         <div class="col-span-4 h-full flex flex-col">
             <div class="glass rounded-[2rem] p-8 h-full flex flex-col border-white/5">
                 <h2 class="text-white uppercase tracking-widest font-extrabold mb-8 text-sm flex items-center gap-2">
@@ -131,11 +133,10 @@
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyOw4fhoiz3QwwrcwczQauBjkvcLaUTlIqtKsNDppU1rIhjLwM1u4apqjuhq3xSqtTq/exec";
         const ROW_HEIGHT = 85; 
 
-        // --- Fullscreen Logic ---
         function toggleFullscreen() {
             if (!document.fullscreenElement) {
                 document.documentElement.requestFullscreen().catch(err => {
-                    alert(`Error attempting to enable full-screen mode: ${err.message}`);
+                    alert(`Error: ${err.message}`);
                 });
                 document.getElementById('fs-text').innerText = "Exit";
             } else {
@@ -148,6 +149,7 @@
 
         async function sync() {
             try {
+                // Fetch current game state and player data[cite: 1]
                 const res = await fetch(`${SCRIPT_URL}?cb=${Date.now()}`);
                 const data = await res.json();
                 
@@ -157,26 +159,31 @@
                 const ansText = document.getElementById('mon-ans-text');
                 const lbContainer = document.getElementById('leaderboard');
 
+                // Update Question Display based on admin status[cite: 1]
                 if(data.status === "ACTIVE") {
                     qEl.innerText = data.question;
                     pEl.innerText = data.points + " POINTS";
                     pEl.classList.remove('hidden');
                     qEl.classList.replace('text-white/20', 'text-white');
 
+                    // Show Answer Overlay if Admin triggered reveal[cite: 1, 2]
                     if(data.reveal === true || data.reveal === "true") {
                         ansText.innerText = data.answer;
                         ansContainer.classList.remove('hidden');
                         ansContainer.classList.add('flex');
                     } else {
                         ansContainer.classList.replace('flex', 'hidden');
+                        ansContainer.classList.add('hidden');
                     }
                 } else {
+                    // Default Idle State
                     qEl.innerText = "Ready for the next Question...";
                     qEl.classList.add('text-white/20');
                     pEl.classList.add('hidden');
                     ansContainer.classList.add('hidden');
                 }
 
+                // Dynamically update Leaderboard based on player scores[cite: 1]
                 if (data.players && data.players.length > 0) {
                     const sortedPlayers = data.players.sort((a, b) => b.score - a.score);
                     const maxScore = Math.max(...sortedPlayers.map(p => p.score), 1);
@@ -185,6 +192,7 @@
                         const safeId = player.name.replace(/\s+/g, '');
                         let playerRow = document.getElementById(`player-${safeId}`);
                         
+                        // Create row if player doesn't exist yet
                         if (!playerRow) {
                             playerRow = document.createElement('div');
                             playerRow.id = `player-${safeId}`;
@@ -204,6 +212,7 @@
                             lbContainer.appendChild(playerRow);
                         }
 
+                        // Update position and stats[cite: 1]
                         playerRow.style.top = `${idx * ROW_HEIGHT}px`;
                         playerRow.querySelector('.rank-text').innerText = (idx + 1).toString().padStart(2, '0');
                         playerRow.querySelector('.score-text').innerText = player.score.toLocaleString();
@@ -218,6 +227,7 @@
             }
         }
 
+        // Poll for updates every 1.5 seconds[cite: 1]
         setInterval(sync, 1500);
         sync();
     </script>
