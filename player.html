@@ -3,201 +3,263 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Score Control - Bible Quiz Pro</title>
+    <link rel="icon" type="image/png" href="IBMP.png">
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
-    <title>Player - Bible Quiz Pro</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Plus Jakarta Sans', sans-serif;
-            background: radial-gradient(circle at bottom left, #1e1b4b, #0f172a);
+            background: radial-gradient(circle at top right, #1e1b4b, #0f172a, #020617);
             min-height: 100vh;
-            color: white;
         }
-        .glass {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(12px);
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(16px);
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
-        .input-focus:focus {
-            outline: none;
-            border-color: #a78bfa;
-            box-shadow: 0 0 15px rgba(167, 139, 250, 0.3);
+
+        .team-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .log-entry {
-            animation: slideIn 0.3s ease-out;
+
+        .team-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(167, 139, 250, 0.3);
+            background: rgba(255, 255, 255, 0.05);
         }
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
+
+        .score-glow {
+            text-shadow: 0 0 20px rgba(129, 140, 248, 0.4);
+        }
+
+        @keyframes success-flash {
+            0% { background-color: rgba(16, 185, 129, 0); }
+            50% { background-color: rgba(16, 185, 129, 0.15); }
+            100% { background-color: rgba(16, 185, 129, 0); }
+        }
+        .flash-success { animation: success-flash 0.4s ease-out; }
+        
+        .badge-pop { animation: badgePop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        @keyframes badgePop {
+            from { opacity: 0; transform: scale(0.5); }
+            to { opacity: 1; transform: scale(1); }
         }
     </style>
 </head>
-<body class="flex items-center justify-center p-6">
+<body class="text-slate-100 antialiased p-4 md:p-8">
 
-    <!-- Step 1: Team Selection -->
-    <div id="setup-ui" class="glass p-8 rounded-[2.5rem] w-full max-w-md shadow-2xl">
-        <h2 class="text-2xl font-extrabold mb-2 text-purple-400">Join the Quiz</h2>
-        <p class="text-slate-400 text-sm mb-8">Enter your team name to begin.</p>
-        
-        <input type="text" id="team-name" placeholder="TEAM NAME" 
-            class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl mb-6 font-bold tracking-widest uppercase input-focus">
-        
-        <button onclick="joinGame()" class="w-full bg-purple-600 hover:bg-purple-500 p-4 rounded-2xl font-black uppercase tracking-widest transition-all active:scale-95">
-            Connect to Live
-        </button>
-    </div>
-
-    <!-- Step 2: Main Game UI -->
-    <div id="game-ui" class="hidden w-full max-w-2xl">
-        <div class="glass p-6 rounded-3xl mb-6 flex justify-between items-center">
-            <div class="text-left">
-                <p class="text-[10px] font-bold text-purple-400 uppercase tracking-widest">Active Team</p>
-                <h3 id="display-team" class="font-black text-xl uppercase italic">---</h3>
+    <div class="max-w-7xl mx-auto">
+        <header class="flex flex-col md:flex-row justify-between items-center mb-10 gap-6">
+            <div class="text-center md:text-left">
+                <h1 class="text-4xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400">
+                    Score Central
+                </h1>
+                <div class="flex items-center justify-center md:justify-start gap-3 mt-2">
+                    <div id="sync-indicator" class="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
+                    <p id="status-text" class="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">System Online</p>
+                </div>
             </div>
-            <div id="live-indicator" class="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 rounded-full border border-emerald-500/20">
-                <span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-                <span class="text-emerald-500 text-[10px] font-bold uppercase">Connected</span>
-            </div>
-        </div>
-
-        <!-- Waiting State -->
-        <div id="waiting-state" class="py-12 text-center">
-            <div class="animate-bounce mb-6 text-6xl">⏳</div>
-            <h2 class="text-3xl font-extrabold text-slate-300">Waiting for Question...</h2>
-            <p class="text-slate-500 mt-2">The admin will flash the next challenge shortly.</p>
-        </div>
-
-        <!-- Answer State -->
-        <div id="answer-state" class="hidden text-center">
-            <div id="pts-badge" class="inline-block bg-amber-400 text-slate-900 px-4 py-1 rounded-full text-xs font-black mb-4">0 POINTS</div>
-            <h2 id="current-q" class="text-2xl md:text-3xl font-bold mb-8 leading-tight">...</h2>
             
-            <input type="text" id="answer-input" placeholder="TYPE YOUR ANSWER HERE" 
-                class="w-full bg-white/10 border-2 border-purple-500/30 p-6 rounded-[2rem] text-2xl font-black text-center uppercase tracking-widest input-focus mb-4">
-            
-            <button id="submit-btn" onclick="submitAnswer()" class="w-full bg-indigo-600 p-5 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20 transition-all active:scale-95">
-                Submit Answer
-            </button>
+            <div class="flex flex-wrap justify-center gap-3">
+                <button onclick="toggleFullscreen()" class="glass-panel px-5 py-2 rounded-xl text-[10px] font-bold hover:bg-white/10 transition-all flex items-center gap-2">
+                    <span id="fs-icon">⛶</span> <span id="fs-text">FULLSCREEN</span>
+                </button>
+                <button onclick="fetchLatestFromSheet()" class="glass-panel px-5 py-2 rounded-xl text-[10px] font-bold hover:bg-white/10 transition-all">
+                    REFRESH DATA
+                </button>
+                <button onclick="resetAllScores()" class="bg-red-500/10 border border-red-500/20 px-5 py-2 rounded-xl text-[10px] font-bold text-red-400 hover:bg-red-600 hover:text-white transition-all">
+                    RESET ALL
+                </button>
+            </div>
+        </header>
+
+        <!-- LIVE SUBMISSION FEED -->
+        <div class="mb-10">
+            <h2 class="text-[10px] font-black text-emerald-400 tracking-[0.3em] uppercase mb-4 flex items-center gap-2">
+                <span class="relative flex h-2 w-2">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                Live Submission Feed
+            </h2>
+            <div id="live-feed" class="glass-panel rounded-2xl p-4 min-h-[70px] flex flex-wrap gap-3 items-center">
+                <p id="no-subs" class="text-slate-500 text-[10px] font-bold uppercase tracking-widest italic ml-2">Waiting for correct answers...</p>
+            </div>
         </div>
 
-        <!-- Recent Correct Answers Log -->
-        <div class="mt-12">
-            <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] mb-4 text-center">Recent Winners</h4>
-            <div id="winner-log" class="space-y-2">
-                <!-- Winners will appear here -->
-            </div>
+        <div id="teams-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Team cards generated by JS -->
         </div>
     </div>
 
     <script>
-        // SCRIPT_URL from your provided source
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwF9VR8YQ2UehcXHf-tZWaZDI0HdCCLF4r-x1s5fzH-D8qaVJPj6v21rr7HMViu6hNK/exec";
-        
-        let teamName = "";
-        let currentCorrectAns = "";
-        let currentPoints = 0;
-        let hasSubmitted = false;
-        let lastWinnerCount = 0;
+        const teams = ["TEAM 1", "TEAM 2", "TEAM 3", "TEAM 4"];
+        const points = [50, 75, 100, 150, 200, 250, 300, 400, 500];
 
-        function joinGame() {
-            const input = document.getElementById('team-name').value.trim();
-            if(!input) return alert("Please enter a team name.");
-            teamName = input.toUpperCase();
-            
-            document.getElementById('display-team').innerText = teamName;
-            document.getElementById('setup-ui').classList.add('hidden');
-            document.getElementById('game-ui').classList.remove('hidden');
-            
-            setInterval(syncPlayer, 1500);
-        }
-
-        async function syncPlayer() {
-            try {
-                const res = await fetch(`${SCRIPT_URL}?cb=${Date.now()}`);
-                const data = await res.json();
-
-                const waiting = document.getElementById('waiting-state');
-                const answer = document.getElementById('answer-state');
-
-                // 1. Handle Question State
-                if (data.status === "ACTIVE") {
-                    waiting.classList.add('hidden');
-                    answer.classList.remove('hidden');
-                    document.getElementById('current-q').innerText = data.question;
-                    document.getElementById('pts-badge').innerText = data.points + " POINTS";
-                    currentCorrectAns = data.answer.toUpperCase();
-                    currentPoints = data.points;
-                } else {
-                    waiting.classList.remove('hidden');
-                    answer.classList.add('hidden');
-                    resetInput();
-                }
-
-                // 2. Update Winner Log (New functionality)
-                if (data.players) {
-                    updateWinnerLog(data.players);
-                }
-            } catch (e) { console.error("Sync Error:", e); }
-        }
-
-        function updateWinnerLog(players) {
-            const logContainer = document.getElementById('winner-log');
-            // We only show teams that actually have a score
-            const scoringTeams = players.filter(p => p.score > 0)
-                                        .sort((a, b) => b.lastUpdated - a.lastUpdated); // Assuming your script tracks timing
-
-            // Simple logic: If scoreboard changes, clear and redraw
-            logContainer.innerHTML = players
-                .filter(p => p.score > 0)
-                .slice(0, 3) // Show top 3 or most recent
-                .map(p => `
-                    <div class="glass log-entry p-3 rounded-xl flex justify-between items-center border-l-4 border-emerald-500">
-                        <span class="text-xs font-bold uppercase tracking-widest">${p.name}</span>
-                        <span class="text-emerald-400 font-black text-xs">+${p.score} Total</span>
-                    </div>
-                `).join('');
-        }
-
-        async function submitAnswer() {
-            if(hasSubmitted) return;
-            
-            const playerAns = document.getElementById('answer-input').value.trim().toUpperCase();
-            if(!playerAns) return;
-
-            if(playerAns === currentCorrectAns) {
-                hasSubmitted = true;
-                const btn = document.getElementById('submit-btn');
-                btn.innerText = "CORRECT!";
-                btn.classList.replace('bg-indigo-600', 'bg-emerald-600');
-
-                // Using the action 'submitScore' and key 'user' to match your Score Central logic
-                await fetch(SCRIPT_URL, {
-                    method: "POST", 
-                    mode: "no-cors",
-                    body: JSON.stringify({ 
-                        action: "submitScore", 
-                        user: teamName, 
-                        points: currentPoints 
-                    })
-                });
-
-                setTimeout(() => {
-                    btn.innerText = "WAITING FOR NEXT...";
-                    btn.disabled = true;
-                }, 1500);
+        // --- Fullscreen Logic ---
+        function toggleFullscreen() {
+            const btnText = document.getElementById('fs-text');
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => console.warn(err.message));
+                btnText.innerText = "EXIT FULLSCREEN";
             } else {
-                alert("WRONG ANSWER! ALL CAPS PLEASE.");
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                    btnText.innerText = "FULLSCREEN";
+                }
             }
         }
 
-        function resetInput() {
-            const btn = document.getElementById('submit-btn');
-            document.getElementById('answer-input').value = "";
-            btn.innerText = "Submit Answer";
-            btn.disabled = false;
-            btn.className = "w-full bg-indigo-600 p-5 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20 transition-all active:scale-95";
-            hasSubmitted = false;
+        // Initialize UI
+        const container = document.getElementById('teams-container');
+        teams.forEach(team => {
+            container.innerHTML += `
+                <div id="card-${team}" class="glass-panel team-card rounded-[2rem] p-6 flex flex-col items-center">
+                    <span class="text-[10px] font-black text-purple-400 tracking-[0.2em] uppercase mb-1 opacity-70">${team}</span>
+                    <div id="score-${team}" class="text-5xl font-black text-white mb-6 score-glow tabular-nums">0</div>
+                    
+                    <div class="grid grid-cols-3 gap-2 w-full mb-5">
+                        ${points.map(pt => `
+                            <button onclick="pushUpdate('${team}', ${pt})" class="bg-emerald-600/20 hover:bg-emerald-500 text-white text-[10px] font-bold py-2.5 rounded-lg transition-all border border-emerald-500/20 active:scale-90">
+                                +${pt}
+                            </button>
+                        `).join('')}
+                    </div>
+                    
+                    <div class="w-full space-y-3 pt-5 border-t border-white/10">
+                        <button onclick="pushUpdate('${team}', 20)" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-3 rounded-xl text-[11px] font-black transition-all active:scale-95 shadow-lg shadow-indigo-900/20">
+                            BONUS +20
+                        </button>
+                        <button onclick="resetIndividualScore('${team}')" class="w-full text-[9px] font-bold text-slate-500 hover:text-red-400 transition-colors uppercase tracking-widest">
+                            Reset Team
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+
+        async function fetchLatestFromSheet() {
+            try {
+                const res = await fetch(`${SCRIPT_URL}?cb=${Date.now()}`);
+                const data = await res.json();
+                const feedContainer = document.getElementById('live-feed');
+
+                data.players.forEach(p => {
+                    const el = document.getElementById(`score-${p.name}`);
+                    if (el) {
+                        const targetScore = parseInt(p.score);
+                        const currentLocalScore = parseInt(el.innerText);
+
+                        // If the score on the server is higher than the local UI, someone got it right!
+                        if(currentLocalScore < targetScore) {
+                            
+                            // 1. Update the Card Score
+                            gsap.to(el, {
+                                innerText: targetScore,
+                                duration: 0.8,
+                                snap: { innerText: 1 },
+                                ease: "power2.out"
+                            });
+
+                            // 2. Update Live Feed Badge[cite: 3]
+                            const noSubsText = document.getElementById('no-subs');
+                            if (noSubsText) noSubsText.remove();
+
+                            const badge = document.createElement('div');
+                            badge.className = "badge-pop bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2";
+                            badge.innerHTML = `<span>✨</span> ${p.name} SUBMITTED CORRECTLY`;
+                            
+                            feedContainer.prepend(badge);
+                        } 
+                        // If score is lower (manual reset), update without a badge
+                        else if (currentLocalScore > targetScore) {
+                            el.innerText = targetScore;
+                        }
+                    }
+                });
+
+                // Clear feed automatically if status changes away from ACTIVE
+                if (data.status !== "ACTIVE" && feedContainer.children.length > 1) {
+                    feedContainer.innerHTML = '<p id="no-subs" class="text-slate-500 text-[10px] font-bold uppercase tracking-widest italic ml-2">Waiting for next question...</p>';
+                }
+
+                updateStatus("Synced", "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]");
+            } catch (e) {
+                updateStatus("Offline", "bg-red-500");
+            }
         }
+
+        async function pushUpdate(teamName, points) {
+            const el = document.getElementById(`score-${teamName}`);
+            const card = document.getElementById(`card-${teamName}`);
+            const currentScore = parseInt(el.innerText);
+            
+            card.classList.add('flash-success');
+            setTimeout(() => card.classList.remove('flash-success'), 400);
+            
+            gsap.to(el, {
+                innerText: currentScore + points,
+                duration: 0.4,
+                snap: { innerText: 1 }
+            });
+            
+            updateStatus("Updating...", "bg-yellow-500");
+
+            try {
+                await fetch(SCRIPT_URL, {
+                    method: "POST",
+                    mode: "no-cors",
+                    body: JSON.stringify({
+                        action: "submitScore",
+                        user: teamName,
+                        points: points
+                    })
+                });
+                updateStatus("Synced", "bg-green-500");
+            } catch (e) {
+                updateStatus("Error", "bg-red-500");
+                fetchLatestFromSheet();
+            }
+        }
+
+        async function resetIndividualScore(teamName) {
+            if(!confirm(`Reset ${teamName} to 0?`)) return;
+            const el = document.getElementById(`score-${teamName}`);
+            const currentScore = parseInt(el.innerText);
+            await pushUpdate(teamName, -currentScore);
+        }
+
+        async function resetAllScores() {
+            if(!confirm("Are you sure you want to reset ALL scores?")) return;
+            updateStatus("Resetting...", "bg-red-500");
+            
+            for (const team of teams) {
+                const el = document.getElementById(`score-${team}`);
+                const currentScore = parseInt(el.innerText);
+                if (currentScore !== 0) {
+                    await fetch(SCRIPT_URL, {
+                        method: "POST",
+                        mode: "no-cors",
+                        body: JSON.stringify({ action: "submitScore", user: team, points: -currentScore })
+                    });
+                }
+            }
+            fetchLatestFromSheet();
+        }
+
+        function updateStatus(text, colorClass) {
+            const indicator = document.getElementById('sync-indicator');
+            const statusText = document.getElementById('status-text');
+            if(statusText) statusText.innerText = text;
+            if(indicator) indicator.className = `w-2.5 h-2.5 rounded-full transition-all duration-300 ${colorClass}`;
+        }
+
+        setInterval(fetchLatestFromSheet, 3000); // Polling every 3 seconds for better real-time feel[cite: 3]
+        window.onload = fetchLatestFromSheet;
     </script>
 </body>
 </html>
