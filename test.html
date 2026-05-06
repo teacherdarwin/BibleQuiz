@@ -10,19 +10,21 @@
         body { font-family: 'Plus Jakarta Sans', sans-serif; background: radial-gradient(circle at bottom left, #1e1b4b, #0f172a); min-height: 100vh; color: white; }
         .glass { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
         .input-focus:focus { outline: none; border-color: #a78bfa; box-shadow: 0 0 15px rgba(167, 139, 250, 0.3); }
+        .success-glow { text-shadow: 0 0 20px rgba(16, 185, 129, 0.5); }
     </style>
 </head>
 <body class="flex items-center justify-center p-6">
-    <!-- SETUP UI -->
+    <!-- 1. JOIN SCREEN -->
     <div id="setup-ui" class="glass p-8 rounded-[2.5rem] w-full max-w-md shadow-2xl">
         <h2 class="text-2xl font-extrabold mb-2 text-purple-400">Join the Quiz</h2>
+        <p class="text-slate-400 text-sm mb-6">Enter your team name to begin.</p>
         <input type="text" id="team-name" placeholder="TEAM NAME" class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl mb-6 font-bold tracking-widest uppercase input-focus">
         <button onclick="joinGame()" class="w-full bg-purple-600 hover:bg-purple-500 p-4 rounded-2xl font-black uppercase tracking-widest transition-all active:scale-95">Connect to Live</button>
     </div>
 
-    <!-- GAME UI -->
+    <!-- 2. MAIN GAME AREA -->
     <div id="game-ui" class="hidden w-full max-w-2xl text-center">
-        <!-- Header Info -->
+        <!-- Persistent Header -->
         <div class="glass p-6 rounded-3xl mb-8 flex justify-between items-center">
             <div class="text-left">
                 <p class="text-[10px] font-bold text-purple-400 uppercase tracking-widest">Active Team</p>
@@ -34,26 +36,27 @@
             </div>
         </div>
 
-        <!-- STATE 1: Waiting for Question -->
+        <!-- WAITING STATE -->
         <div id="waiting-state" class="py-20">
             <div class="animate-bounce mb-6 text-6xl">⏳</div>
-            <h2 class="text-3xl font-extrabold text-slate-300 uppercase tracking-tighter">Waiting for Question...</h2>
-            <p class="text-slate-500 text-sm mt-2">The host will push the next question shortly.</p>
+            <h2 class="text-3xl font-extrabold text-slate-300 uppercase tracking-tight">Waiting for Question...</h2>
+            <p class="text-slate-500 mt-2">The session is currently idle.</p>
         </div>
 
-        <!-- STATE 2: Answering Question -->
+        <!-- ANSWER STATE -->
         <div id="answer-state" class="hidden">
             <div id="pts-badge" class="inline-block bg-amber-400 text-slate-900 px-4 py-1 rounded-full text-xs font-black mb-4">0 POINTS</div>
-            <h2 id="current-q" class="text-3xl font-bold mb-8 leading-tight">...</h2>
-            <input type="text" id="answer-input" placeholder="TYPE YOUR ANSWER HERE" class="w-full bg-white/10 border-2 border-purple-500/30 p-6 rounded-[2rem] text-2xl font-black text-center uppercase tracking-widest input-focus mb-4">
+            <h2 id="current-q" class="text-3xl font-bold mb-8 leading-snug">...</h2>
+            <input type="text" id="answer-input" placeholder="TYPE ANSWER HERE" class="w-full bg-white/10 border-2 border-purple-500/30 p-6 rounded-[2rem] text-2xl font-black text-center uppercase tracking-widest input-focus mb-4">
             <button id="submit-btn" onclick="submitAnswer()" class="w-full bg-indigo-600 p-5 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20 transition-all active:scale-95">Submit Answer</button>
         </div>
 
-        <!-- STATE 3: Correct Submission Success -->
+        <!-- SUCCESS STATE -->
         <div id="success-state" class="hidden py-20">
-            <div class="text-6xl mb-6">✅</div>
-            <h2 class="text-4xl font-black text-emerald-400 uppercase italic">Great Job!</h2>
-            <p class="text-slate-400 mt-2">Score submitted. Waiting for host to reset...</p>
+            <div class="text-6xl mb-6">🏆</div>
+            <h2 class="text-4xl font-black text-emerald-400 uppercase italic success-glow">Well Done!</h2>
+            <p class="text-slate-400 mt-4 tracking-widest text-sm uppercase">Correct Answer Submitted</p>
+            <p class="text-slate-500 text-xs mt-1">Waiting for the next round...</p>
         </div>
     </div>
 
@@ -63,15 +66,14 @@
 
         function joinGame() {
             teamName = document.getElementById('team-name').value.trim().toUpperCase();
-            if(!teamName) return alert("Please enter your Team Name first");
+            if(!teamName) return alert("Enter team name");
             
             document.getElementById('display-team').innerText = teamName;
             document.getElementById('setup-ui').classList.add('hidden');
             document.getElementById('game-ui').classList.remove('hidden');
             
-            // Initial sync then repeat every 1.5s
-            syncPlayer();
-            setInterval(syncPlayer, 1500);
+            syncPlayer(); // Immediate sync
+            setInterval(syncPlayer, 1500); // Polling[cite: 3]
         }
 
         async function syncPlayer() {
@@ -83,17 +85,14 @@
                 const answer = document.getElementById('answer-state');
                 const success = document.getElementById('success-state');
 
-                // Case-insensitive check for "ACTIVE" status
+                // Robust check for ACTIVE status
                 if (data.status && data.status.toUpperCase() === "ACTIVE") {
+                    waiting.classList.add('hidden');
                     
                     if (hasSubmitted) {
-                        // If they already got it right, keep showing success screen
-                        waiting.classList.add('hidden');
                         answer.classList.add('hidden');
                         success.classList.remove('hidden');
                     } else {
-                        // Show the question and input box
-                        waiting.classList.add('hidden');
                         success.classList.add('hidden');
                         answer.classList.remove('hidden');
                         
@@ -104,38 +103,33 @@
                         currentPoints = data.points || 0;
                     }
                 } else {
-                    // Host has closed or reset the session[cite: 2]
+                    // Reset UI for next round when status is IDLE/RESET
                     waiting.classList.remove('hidden');
                     answer.classList.add('hidden');
                     success.classList.add('hidden');
                     
-                    // Reset local submission locks for next round
                     document.getElementById('answer-input').value = "";
-                    const btn = document.getElementById('submit-btn');
-                    btn.innerText = "Submit Answer";
-                    btn.classList.replace('bg-emerald-600', 'bg-indigo-600');
                     hasSubmitted = false;
                 }
             } catch (e) { 
-                console.error("Sync error:", e); 
+                console.error("Connection Error:", e); 
             }
         }
 
         async function submitAnswer() {
-            const inputEl = document.getElementById('answer-input');
-            const playerAns = inputEl.value.trim().toUpperCase();
+            const inputField = document.getElementById('answer-input');
+            const playerAns = inputField.value.trim().toUpperCase();
             
             if(!playerAns || hasSubmitted) return;
 
             if(playerAns === currentCorrectAns) {
                 hasSubmitted = true;
-                const btn = document.getElementById('submit-btn');
-                btn.innerText = "SUBMITTING...";
                 
-                // Immediate UI feedback
+                // Switch to success view immediately for better UX
                 document.getElementById('answer-state').classList.add('hidden');
                 document.getElementById('success-state').classList.remove('hidden');
 
+                // Push score to Google Sheets
                 try {
                     await fetch(SCRIPT_URL, {
                         method: "POST", 
@@ -146,13 +140,13 @@
                             points: currentPoints 
                         })
                     });
-                } catch (e) { 
-                    console.error("Submission failed:", e); 
+                } catch (err) {
+                    console.error("Submission failed:", err);
                 }
             } else { 
-                alert("WRONG ANSWER! Try again."); 
-                inputEl.value = "";
-                inputEl.focus();
+                alert("WRONG ANSWER! TRY AGAIN."); 
+                inputField.value = "";
+                inputField.focus();
             }
         }
     </script>
