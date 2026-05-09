@@ -130,7 +130,8 @@
     </div>
 
     <script>
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyOw4fhoiz3QwwrcwczQauBjkvcLaUTlIqtKsNDppU1rIhjLwM1u4apqjuhq3xSqtTq/exec";
+        // Update this URL with your new Web App deployment URL
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzVlUbM7GCnfiDHYgCmlIqarzqig7_VW1VDwLHXcsyv-zQL9yfKRqpVJmhBhVavn7_T/exec";
         const ROW_HEIGHT = 85; 
 
         function toggleFullscreen() {
@@ -149,7 +150,7 @@
 
         async function sync() {
             try {
-                // Fetch current game state and player data[cite: 1]
+                // Fetch current game state and player data
                 const res = await fetch(`${SCRIPT_URL}?cb=${Date.now()}`);
                 const data = await res.json();
                 
@@ -159,21 +160,22 @@
                 const ansText = document.getElementById('mon-ans-text');
                 const lbContainer = document.getElementById('leaderboard');
 
-                // Update Question Display based on admin status[cite: 1]
+                // Update Question Display based on admin status
                 if(data.status === "ACTIVE") {
                     qEl.innerText = data.question;
                     pEl.innerText = data.points + " POINTS";
                     pEl.classList.remove('hidden');
-                    qEl.classList.replace('text-white/20', 'text-white');
+                    qEl.classList.remove('text-white/20');
+                    qEl.classList.add('text-white');
 
-                    // Show Answer Overlay if Admin triggered reveal[cite: 1, 2]
+                    // Show Answer Overlay if Admin triggered reveal
                     if(data.reveal === true || data.reveal === "true") {
                         ansText.innerText = data.answer;
                         ansContainer.classList.remove('hidden');
                         ansContainer.classList.add('flex');
                     } else {
-                        ansContainer.classList.replace('flex', 'hidden');
                         ansContainer.classList.add('hidden');
+                        ansContainer.classList.remove('flex');
                     }
                 } else {
                     // Default Idle State
@@ -181,11 +183,16 @@
                     qEl.classList.add('text-white/20');
                     pEl.classList.add('hidden');
                     ansContainer.classList.add('hidden');
+                    ansContainer.classList.remove('flex');
                 }
 
-                // Dynamically update Leaderboard based on player scores[cite: 1]
+                // Dynamically update Leaderboard based on data.players (from the 'players' sheet)
                 if (data.players && data.players.length > 0) {
-                    const sortedPlayers = data.players.sort((a, b) => b.score - a.score);
+                    // Filter out header row if it exists and sort by score
+                    const sortedPlayers = data.players
+                        .filter(p => p.name !== "Username") 
+                        .sort((a, b) => b.score - a.score);
+
                     const maxScore = Math.max(...sortedPlayers.map(p => p.score), 1);
 
                     sortedPlayers.forEach((player, idx) => {
@@ -212,7 +219,7 @@
                             lbContainer.appendChild(playerRow);
                         }
 
-                        // Update position and stats[cite: 1]
+                        // Update position and stats
                         playerRow.style.top = `${idx * ROW_HEIGHT}px`;
                         playerRow.querySelector('.rank-text').innerText = (idx + 1).toString().padStart(2, '0');
                         playerRow.querySelector('.score-text').innerText = player.score.toLocaleString();
@@ -227,7 +234,7 @@
             }
         }
 
-        // Poll for updates every 1.5 seconds[cite: 1]
+        // Poll for updates every 1.5 seconds
         setInterval(sync, 1500);
         sync();
     </script>
