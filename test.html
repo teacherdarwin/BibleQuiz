@@ -13,12 +13,16 @@
     </style>
 </head>
 <body class="flex items-center justify-center p-6">
+
+    <!-- REGISTRATION UI -->
     <div id="setup-ui" class="glass p-8 rounded-[2.5rem] w-full max-w-md shadow-2xl">
         <h2 class="text-2xl font-extrabold mb-2 text-purple-400">Join the Quiz</h2>
-        <input type="text" id="team-name" placeholder="TEAM NAME" class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl mb-6 font-bold tracking-widest uppercase input-focus">
-        <button onclick="joinGame()" class="w-full bg-purple-600 hover:bg-purple-500 p-4 rounded-2xl font-black uppercase tracking-widest transition-all active:scale-95">Connect to Live</button>
+        <p class="text-slate-400 text-sm mb-6">Enter your name to register for the live session.</p>
+        <input type="text" id="team-name" placeholder="YOUR NAME / TEAM" class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl mb-6 font-bold tracking-widest uppercase input-focus">
+        <button id="join-btn" onclick="joinGame()" class="w-full bg-purple-600 hover:bg-purple-500 p-4 rounded-2xl font-black uppercase tracking-widest transition-all active:scale-95">Connect to Live</button>
     </div>
 
+    <!-- GAMEPLAY UI -->
     <div id="game-ui" class="hidden w-full max-w-2xl text-center">
         <div class="glass p-6 rounded-3xl mb-8 flex justify-between items-center">
             <div class="text-left">
@@ -45,16 +49,47 @@
     </div>
 
     <script>
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwF9VR8YQ2UehcXHf-tZWaZDI0HdCCLF4r-x1s5fzH-D8qaVJPj6v21rr7HMViu6hNK/exec";
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzVlUbM7GCnfiDHYgCmlIqarzqig7_VW1VDwLHXcsyv-zQL9yfKRqpVJmhBhVavn7_T/exec";
         let teamName = "", currentCorrectAns = "", currentPoints = 0, hasSubmitted = false;
 
-        function joinGame() {
-            teamName = document.getElementById('team-name').value.trim().toUpperCase();
-            if(!teamName) return alert("Enter team name");
-            document.getElementById('display-team').innerText = teamName;
-            document.getElementById('setup-ui').classList.add('hidden');
-            document.getElementById('game-ui').classList.remove('hidden');
-            setInterval(syncPlayer, 1500);
+        async function joinGame() {
+            const input = document.getElementById('team-name');
+            const btn = document.getElementById('join-btn');
+            teamName = input.value.trim().toUpperCase();
+
+            if(!teamName) return alert("Please enter a name to join.");
+
+            // 1. Visual Loading State
+            btn.innerText = "REGISTERING...";
+            btn.disabled = true;
+
+            try {
+                // 2. Send registration to Google Sheet
+                // This targets the 'players' sheet under column 'Username'
+                await fetch(SCRIPT_URL, {
+                    method: "POST",
+                    mode: "no-cors", 
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ 
+                        action: "registerPlayer", 
+                        user: teamName 
+                    })
+                });
+
+                // 3. UI Transition
+                document.getElementById('display-team').innerText = teamName;
+                document.getElementById('setup-ui').classList.add('hidden');
+                document.getElementById('game-ui').classList.remove('hidden');
+                
+                // 4. Start listening for quiz updates
+                setInterval(syncPlayer, 1500);
+
+            } catch (e) {
+                console.error("Error registering:", e);
+                alert("Connection error. Please try again.");
+                btn.innerText = "Connect to Live";
+                btn.disabled = false;
+            }
         }
 
         async function syncPlayer() {
@@ -75,26 +110,40 @@
                     waiting.classList.remove('hidden');
                     answer.classList.add('hidden');
                     document.getElementById('answer-input').value = "";
+                    
+                    // Reset submit button visual if it was green
+                    const btn = document.getElementById('submit-btn');
+                    btn.innerText = "Submit Answer";
+                    btn.className = "w-full bg-indigo-600 p-5 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20";
                     hasSubmitted = false;
                 }
-            } catch (e) { console.error(e); }
+            } catch (e) { console.error("Sync error:", e); }
         }
 
         async function submitAnswer() {
             const playerAns = document.getElementById('answer-input').value.trim().toUpperCase();
+            const btn = document.getElementById('submit-btn');
+
             if(!playerAns || hasSubmitted) return;
 
             if(playerAns === currentCorrectAns) {
                 hasSubmitted = true;
-                const btn = document.getElementById('submit-btn');
-                btn.innerText = "CORRECT!"; btn.classList.replace('bg-indigo-600', 'bg-emerald-600');
+                btn.innerText = "CORRECT!"; 
+                btn.classList.replace('bg-indigo-600', 'bg-emerald-600');
 
-                // Send to central scoreboard
+                // Send score to Google Sheet
                 await fetch(SCRIPT_URL, {
-                    method: "POST", mode: "no-cors",
-                    body: JSON.stringify({ action: "submitScore", user: teamName, points: currentPoints })
+                    method: "POST", 
+                    mode: "no-cors",
+                    body: JSON.stringify({ 
+                        action: "submitScore", 
+                        user: teamName, 
+                        points: currentPoints 
+                    })
                 });
-            } else { alert("WRONG ANSWER!"); }
+            } else { 
+                alert("WRONG ANSWER! TRY AGAIN."); 
+            }
         }
     </script>
 </body>
