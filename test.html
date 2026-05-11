@@ -11,6 +11,8 @@
         body { font-family: 'Plus Jakarta Sans', sans-serif; background: radial-gradient(circle at bottom left, #1e1b4b, #0f172a); min-height: 100vh; color: white; }
         .glass { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
         .input-focus:focus { outline: none; border-color: #a78bfa; box-shadow: 0 0 15px rgba(167, 139, 250, 0.3); }
+        .timer-low { color: #f87171; animation: pulse 1s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     </style>
 </head>
 <body class="flex items-center justify-center p-6">
@@ -30,9 +32,10 @@
                 <p class="text-[10px] font-bold text-purple-400 uppercase tracking-widest">Active Team</p>
                 <h3 id="display-team" class="font-black text-xl uppercase italic">---</h3>
             </div>
-            <div class="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 rounded-full border border-emerald-500/20">
-                <span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-                <span class="text-emerald-500 text-[10px] font-bold uppercase">Connected</span>
+            <!-- TIMER DISPLAY -->
+            <div id="timer-box" class="hidden flex flex-col items-end">
+                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Time Remaining</p>
+                <h3 id="timer-seconds" class="font-black text-2xl text-amber-400">20s</h3>
             </div>
         </div>
 
@@ -44,50 +47,57 @@
         <div id="answer-state" class="hidden">
             <div id="pts-badge" class="inline-block bg-amber-400 text-slate-900 px-4 py-1 rounded-full text-xs font-black mb-4">0 POINTS</div>
             <h2 id="current-q" class="text-3xl font-bold mb-8">...</h2>
-            <input type="text" id="answer-input" placeholder="TYPE YOUR ANSWER HERE" class="w-full bg-white/10 border-2 border-purple-500/30 p-6 rounded-[2rem] text-2xl font-black text-center uppercase tracking-widest input-focus mb-4">
-            <button id="submit-btn" onclick="submitAnswer()" class="w-full bg-indigo-600 p-5 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20">Submit Answer</button>
+            
+            <div id="input-container">
+                <input type="text" id="answer-input" placeholder="TYPE YOUR ANSWER HERE" class="w-full bg-white/10 border-2 border-purple-500/30 p-6 rounded-[2rem] text-2xl font-black text-center uppercase tracking-widest input-focus mb-4">
+                <button id="submit-btn" onclick="submitAnswer()" class="w-full bg-indigo-600 p-5 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20">Submit Answer</button>
+            </div>
+
+            <!-- BLIND FEEDBACK AREA -->
+            <div id="blind-feedback" class="hidden mt-6 p-6 border-2 border-dashed border-white/20 rounded-3xl">
+                <p class="text-emerald-400 font-bold mb-2">RESPONSE RECORDED</p>
+                <p class="text-slate-400 text-sm mb-4 italic">Wait for the correct answer</p>
+                <div class="bg-white/5 p-4 rounded-xl">
+                    <p class="text-[10px] uppercase text-slate-500 font-bold">The Answer is:</p>
+                    <p id="reveal-answer" class="text-2xl font-black text-white">---</p>
+                </div>
+            </div>
         </div>
     </div>
 
     <script>
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzVlUbM7GCnfiDHYgCmlIqarzqig7_VW1VDwLHXcsyv-zQL9yfKRqpVJmhBhVavn7_T/exec";
         let teamName = "", currentCorrectAns = "", currentPoints = 0, hasSubmitted = false;
+        
+        // Timer Variables
+        let timeLeft = 20; // Set your desired time limit here
+        let timerInterval = null;
+        let activeQuestionId = ""; // To prevent timer reset on every sync
 
         async function joinGame() {
             const input = document.getElementById('team-name');
             const btn = document.getElementById('join-btn');
             teamName = input.value.trim().toUpperCase();
-
             if(!teamName) return alert("Please enter a name to join.");
 
-            // 1. Visual Loading State
             btn.innerText = "REGISTERING...";
             btn.disabled = true;
 
             try {
-                // 2. Send registration to Google Sheet
-                // This targets the 'players' sheet under column 'Username'
                 await fetch(SCRIPT_URL, {
                     method: "POST",
                     mode: "no-cors", 
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ 
-                        action: "registerPlayer", 
-                        user: teamName 
-                    })
+                    body: JSON.stringify({ action: "registerPlayer", user: teamName })
                 });
 
-                // 3. UI Transition
                 document.getElementById('display-team').innerText = teamName;
                 document.getElementById('setup-ui').classList.add('hidden');
                 document.getElementById('game-ui').classList.remove('hidden');
-                
-                // 4. Start listening for quiz updates
                 setInterval(syncPlayer, 1500);
 
             } catch (e) {
-                console.error("Error registering:", e);
-                alert("Connection error. Please try again.");
+                alert("Connection error.");
                 btn.innerText = "Connect to Live";
                 btn.disabled = false;
             }
@@ -99,10 +109,19 @@
                 const data = await res.json();
                 const waiting = document.getElementById('waiting-state');
                 const answer = document.getElementById('answer-state');
+                const timerBox = document.getElementById('timer-box');
 
                 if (data.status === "ACTIVE") {
                     waiting.classList.add('hidden');
                     answer.classList.remove('hidden');
+                    timerBox.classList.remove('hidden');
+                    
+                    // Start timer ONLY if this is a new question
+                    if (activeQuestionId !== data.question) {
+                        activeQuestionId = data.question;
+                        resetForNewQuestion(data);
+                    }
+                    
                     document.getElementById('current-q').innerText = data.question;
                     document.getElementById('pts-badge').innerText = data.points + " POINTS";
                     currentCorrectAns = data.answer.toUpperCase();
@@ -110,29 +129,52 @@
                 } else {
                     waiting.classList.remove('hidden');
                     answer.classList.add('hidden');
-                    document.getElementById('answer-input').value = "";
-                    
-                    // Reset submit button visual if it was green
-                    const btn = document.getElementById('submit-btn');
-                    btn.innerText = "Submit Answer";
-                    btn.className = "w-full bg-indigo-600 p-5 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20";
-                    hasSubmitted = false;
+                    timerBox.classList.add('hidden');
+                    activeQuestionId = "";
+                    clearInterval(timerInterval);
                 }
             } catch (e) { console.error("Sync error:", e); }
         }
 
+        function resetForNewQuestion(data) {
+            hasSubmitted = false;
+            timeLeft = 20; // Reset to 20 seconds
+            
+            // UI Reset
+            document.getElementById('answer-input').value = "";
+            document.getElementById('input-container').classList.remove('hidden');
+            document.getElementById('blind-feedback').classList.add('hidden');
+            document.getElementById('timer-seconds').innerText = timeLeft + "s";
+            document.getElementById('timer-seconds').classList.remove('timer-low');
+
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                document.getElementById('timer-seconds').innerText = timeLeft + "s";
+                
+                if(timeLeft <= 5) document.getElementById('timer-seconds').classList.add('timer-low');
+                
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    if (!hasSubmitted) submitAnswer(); // Auto-submit when time is up
+                }
+            }, 1000);
+        }
+
         async function submitAnswer() {
+            if(hasSubmitted) return;
+            hasSubmitted = true;
+            clearInterval(timerInterval);
+
             const playerAns = document.getElementById('answer-input').value.trim().toUpperCase();
-            const btn = document.getElementById('submit-btn');
+            
+            // Hide Input and show "Wait for Answer" UI
+            document.getElementById('input-container').classList.add('hidden');
+            document.getElementById('blind-feedback').classList.remove('hidden');
+            document.getElementById('reveal-answer').innerText = currentCorrectAns;
 
-            if(!playerAns || hasSubmitted) return;
-
+            // Only upload score if they actually got it right
             if(playerAns === currentCorrectAns) {
-                hasSubmitted = true;
-                btn.innerText = "CORRECT!"; 
-                btn.classList.replace('bg-indigo-600', 'bg-emerald-600');
-
-                // Send score to Google Sheet
                 await fetch(SCRIPT_URL, {
                     method: "POST", 
                     mode: "no-cors",
@@ -142,8 +184,6 @@
                         points: currentPoints 
                     })
                 });
-            } else { 
-                alert("WRONG ANSWER! TRY AGAIN."); 
             }
         }
     </script>
